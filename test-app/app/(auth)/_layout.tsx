@@ -1,0 +1,22 @@
+// ========================================
+// AUTH LAYOUT - ABSURDITY AI SKETCH MACHINE
+// ========================================
+// Agent: Developer Amelia (EMDADF Phase 6)
+// Story: STORY-009 - Auth Flow Layout
+
+import { Stack } from 'expo-router';
+
+export default function AuthLayout() {
+    return (
+        <Stack
+            screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: '#0A0A0F' },
+                animation: 'slide_from_right',
+            }}
+        >
+            <Stack.Screen name="login" />
+            <Stack.Screen name="guest" />
+        </Stack>
+    );
+}

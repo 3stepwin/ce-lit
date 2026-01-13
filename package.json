@@ -1,0 +1,11 @@
+{
+    "name": "cultengine-lit-root",
+    "private": true,
+    "scripts": {
+        "start": "npm start --prefix test-app",
+        "test": "npm test --prefix test-app",
+        "lint": "npm run lint --prefix test-app",
+        "start:absurdity": "start_absurdity.bat",
+        "fix": "fix-and-start.bat"
+    }
+}

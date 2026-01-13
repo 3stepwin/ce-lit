@@ -1,0 +1,19 @@
+{
+    "expo": {
+        "name": "test-app",
+        "slug": "test-app",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "userInterfaceStyle": "dark",
+        "newArchEnabled": true,
+        "platforms": [
+            "ios",
+            "android",
+            "web"
+        ],
+        "plugins": [
+            "expo-router",
+            "expo-screen-orientation"
+        ]
+    }
+}

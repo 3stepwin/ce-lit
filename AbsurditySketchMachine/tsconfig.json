@@ -1,0 +1,21 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": [
+        "*"
+      ]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "supabase",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js"
+  ]
+}

@@ -1,0 +1,27 @@
+project_name: "Absurdity AI Sketch Machine"
+version: "2.1"
+status: "in_progress"
+track: "BMad Method"
+current_phase: "6_development"
+
+agents:
+  architect_winston: 
+    status: "active"
+    task: "Refining Orchestration Logic: Single Processor for T2I and I2V states"
+  dev_amelia: 
+    status: "active"
+    task: "Implementing I2V logic in process-cult-assets and building Status Screen"
+
+phases:
+  1_strategic_planning: "done"
+  2_technical_architecture: "done"
+  3_ux_design: "done"
+  4_agentic_planning: "done"
+  5_story_creation: "done"
+  6_development: "active"
+  7_qa: "pending"
+  8_deployment: "pending"
+
+meta:
+  last_updated: "2026-01-12"
+  current_objective: "Close the loop on Asset Orchestration (Scripts -> Images -> Videos)"
