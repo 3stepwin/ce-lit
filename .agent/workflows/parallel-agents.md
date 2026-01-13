@@ -7,7 +7,7 @@ description: Parallel Agents Workflow
 1.  **Orchestrator Logic**:
     *   The user wants multiple specialized agents working in tandem.
     *   In the context of EMDADF Phase 6 (Development), this means:
-        *   **Agent 1 (Frontend):** Focus on React Native UI/UX (`app/`).
+        *   **Agent 1 (Frontend):** Focus on  "React Native" example only follow user designated stack if none use best option  UI/UX (`app/`).
         *   **Agent 2 (Backend):** Focus on Edge Functions & Novita API (`supabase/functions/`).
         *   **Agent 3 (QA):** Verify results.
 

@@ -7,6 +7,7 @@ This securely stores the key for the Edge Functions to use.
 
 ```bash
 npx supabase secrets set NOVITA_API_KEY=sk_Yj_ZjHWkqfCCMS0vBSfHZE0g8BZaWOyPjBaA1KH_3II --project-ref ebostxmvyocypwqpgzct
+npx supabase secrets set GEMINI_API_KEY=AIzaSyBMCaDZYotvmldxIw71U-fwuzOuvXospEI --project-ref ebostxmvyocypwqpgzct
 ```
 
 ## 2. Deploy the Updated Edge Functions
