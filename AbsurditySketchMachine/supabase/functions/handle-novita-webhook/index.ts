@@ -215,7 +215,8 @@ Deno.serve(async (req) => {
 
                     // ==> TRIGGER I2V (Immediate chain since Swap was sync)
                     console.log("Face Swap Done. Triggering I2V...");
-                    const motionPrompt = sketch.content.motion_prompt || "cinematic subtle movement";
+                    const video_prompt_json = sketch.video_prompt_json || {};
+                    const motionPrompt = `${video_prompt_json.motion_type || 'cinematic'} ${video_prompt_json.camera_move || 'subtle movement'}`.trim();
                     const i2vTaskId = await callNovitaI2V(novitaKey, swappedBase64, motionPrompt, webhookUrl);
 
                     // Update DB TO I2V Status
@@ -233,7 +234,8 @@ Deno.serve(async (req) => {
                 } else {
                     // ==> SKIP SWAP, TRIGGER I2V DIRECTLY
                     console.log("Skipping Face Swap. Triggering I2V...");
-                    const motionPrompt = sketch.content.motion_prompt || "cinematic subtle movement";
+                    const video_prompt_json = sketch.video_prompt_json || {};
+                    const motionPrompt = `${video_prompt_json.motion_type || 'cinematic'} ${video_prompt_json.camera_move || 'subtle movement'}`.trim();
                     // Need base64 for Kling usually, or URL. Kling supports URL? 
                     // Novita Kling docs say "image_file" (Base64). Let's convert.
                     const t2iBase64 = await urlToBase64(t2iUrl);
