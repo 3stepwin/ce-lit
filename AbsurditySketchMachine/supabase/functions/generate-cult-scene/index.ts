@@ -147,22 +147,47 @@ Deno.serve(async (req) => {
         const { error: shotsError } = await supabase.from('shots').insert(shotsToInsert);
         if (shotsError) throw shotsError;
 
-        // 4. Trigger Asset Processing Immediately
-        const baseUrl = req.url.split('/generate-cult-scene')[0]; // simple hack for base url
-        // Alternatively use supabase functions url env if available or hardcode
+        // 4. Trigger Asset Processing with Retry Logic
+        const baseUrl = req.url.split('/generate-cult-scene')[0];
         const functionsUrl = `${supabaseUrl}/functions/v1`;
 
-        try {
-            // Trigger Visual Asset Processing
-            fetch(`${functionsUrl}/process-cult-assets`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${serviceRoleKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({})
-            }).catch(e => console.error("Visuals trigger fail:", e));
+        // Helper: Retry async function call up to N times
+        async function triggerWithRetry(url: string, maxRetries: number = 3) {
+            let lastError: any;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${serviceRoleKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    });
+                    if (res.ok) {
+                        console.log(`✓ Asset processing triggered successfully on attempt ${attempt}`);
+                        return;
+                    }
+                    lastError = await res.text();
+                    console.warn(`Attempt ${attempt}: Asset trigger returned ${res.status}:`, lastError);
+                } catch (e) {
+                    lastError = e;
+                    console.warn(`Attempt ${attempt} failed:`, lastError);
+                    if (attempt < maxRetries) {
+                        // Exponential backoff: 100ms, 200ms, 400ms
+                        await new Promise(r => setTimeout(r, 100 * Math.pow(2, attempt - 1)));
+                    }
+                }
+            }
+            // Log final failure but don't throw (non-blocking)
+            console.error(`✗ Asset processing trigger failed after ${maxRetries} attempts:`, lastError);
+        }
 
+        try {
+            // Trigger Visual Asset Processing with retry
+            triggerWithRetry(`${functionsUrl}/process-cult-assets`).catch(e => {
+                console.error("Unhandled error in asset trigger:", e);
+            });
         } catch (e) {
             console.error("URL parsing error:", e);
         }

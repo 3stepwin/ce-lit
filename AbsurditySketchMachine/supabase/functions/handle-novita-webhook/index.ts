@@ -112,14 +112,20 @@ Deno.serve(async (req) => {
         }
 
         // Extract nested payload
+        // NOTE: Novita webhook structure: { event_type, payload: { task: {...}, extra: {...} } }
+        // task contains: task_id, status, created_at, etc.
+        // extra contains: images or videos based on task type
         const { task, extra } = body.payload || {};
         const task_id = task?.task_id;
         const status = task?.status;
-        const videos = extra?.videos;
-        const images = extra?.images;
+        const videos = extra?.videos || [];
+        const images = extra?.images || [];
 
         // Initial Validation
-        if (!task_id || !status) return new Response("Invalid payload", { status: 400 });
+        if (!task_id || !status) {
+            console.error("Invalid payload structure:", JSON.stringify(body));
+            return new Response("Invalid payload", { status: 400 });
+        }
 
         // Setup Clients
         // @ts-ignore
@@ -129,7 +135,7 @@ Deno.serve(async (req) => {
         const geminiKey = Deno.env.get("GEMINI_API_KEY"); // Might need for refinement?
         // @ts-ignore
         const novitaKey = Deno.env.get("NOVITA_API_KEY");
-        const webhookUrl = "https://ebostxmvyocypwqpgzct.supabase.co/functions/v1/handle-novita-webhook";
+        const webhookUrl = Deno.env.get("WEBHOOK_URL") || "https://ebostxmvyocypwqpgzct.supabase.co/functions/v1/handle-novita-webhook";
 
         const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -153,7 +159,7 @@ Deno.serve(async (req) => {
         if (status === "TASK_STATUS_FAILED" || status === "FAILED") {
             await supabase.from('sketches').update({
                 status: "failed",
-                error_message: payload.reason || "Novita task failed"
+                error_message: body.payload?.reason || "Novita task failed"
             }).eq('id', sketch.id);
             return new Response("Marked as failed", { status: 200 });
         }
@@ -183,7 +189,7 @@ Deno.serve(async (req) => {
             }
 
             // --- STATE: GENERATING IMAGE (T2I Done) ---
-            if (sketch.status === 'generating_image') {
+            else if (sketch.status === 'generating_image') {
                 const t2iUrl = images?.[0]?.image_url;
                 if (!t2iUrl) throw new Error("T2I Succeeded but no image_url found");
 
@@ -191,8 +197,7 @@ Deno.serve(async (req) => {
 
                 // NEXT STEP: Face Swap OR Video
                 // Check if we have a user avatar to swap
-                // const userAvatarUrl = sketch.meta?.force_avatar_url; // Or fetch from table
-                const userAvatarUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1000"; // Placeholder
+                const userAvatarUrl = sketch.meta?.user_avatar_url || sketch.avatar_url;
 
                 if (userAvatarUrl && sketch.role !== 'generic') {
                     // ==> TRIGGER FACE SWAP
@@ -251,16 +256,42 @@ Deno.serve(async (req) => {
 
                 console.log("I2V Complete. URL:", videoUrl);
 
-                await supabase.from('sketches').update({
-                    status: "complete",
-                    generation_progress: 100,
-                    video_url: videoUrl,
-                    completed_at: new Date().toISOString()
-                }).eq('id', sketch.id);
+                // Update with idempotency: Only update if still in generating_video state
+                const { error: updateError } = await supabase.from('sketches')
+                    .update({
+                        status: "complete",
+                        generation_progress: 100,
+                        video_url: videoUrl,
+                        completed_at: new Date().toISOString()
+                    })
+                    .eq('id', sketch.id)
+                    .eq('status', 'generating_video'); // Idempotency: only update if still in this state
+
+                if (updateError) {
+                    console.warn("Idempotent update skipped or failed (already completed?)", updateError);
+                }
             }
 
             // --- STATE: SWAPPING FACE (Async Fallback) ---
-            // If we move to Async Face Swap later, handle it here + duplicate I2V trigger logic.
+            else if (sketch.status === 'swapping_face') {
+                const swappedUrl = images?.[0]?.image_url;
+                if (!swappedUrl) throw new Error("Face Swap succeeded but no image_url found");
+
+                console.log("Face Swap Complete. URL:", swappedUrl);
+
+                // Now trigger I2V with the swapped image
+                const motionPrompt = sketch.content?.motion_prompt || "cinematic subtle movement";
+                const swappedBase64 = await urlToBase64(swappedUrl);
+                const i2vTaskId = await callNovitaI2V(novitaKey, swappedBase64, motionPrompt, webhookUrl);
+
+                // Update DB to I2V Status
+                await supabase.from('sketches').update({
+                    status: "generating_video",
+                    generation_progress: 70,
+                    external_id: i2vTaskId,
+                    meta: { ...sketch.meta, swapped_image_url: swappedUrl }
+                }).eq('id', sketch.id);
+            }
 
         }
 
