@@ -226,16 +226,25 @@ export const subscribeToSketchStatus = (
 // EDGE FUNCTION CALLS
 // ========================================
 
+export const callGetSeed = async (category?: string, sessionId?: string) => {
+    const { data, error } = await supabase.functions.invoke('get-seed', {
+        body: { category, session_id: sessionId },
+    });
+    return { data, error };
+};
+
 export const callGenerateSketch = async (
     userId: string,
     avatarId: string,
-    config: { type: string; role: string; dumbnessLevel: number }
+    config: Record<string, any>,
+    sketchId?: string
 ) => {
     const { data, error } = await supabase.functions.invoke('generate-sketch', {
         body: {
             userId,
             avatarId,
-            config,
+            sketchId,
+            ...config,
         },
     });
     return { data, error };

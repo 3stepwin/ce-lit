@@ -37,22 +37,24 @@ export interface UserAvatar {
 // ========================================
 
 export type SketchType =
+    | 'onboarding'
+    | 'compliance'
+    | 'customer_support'
+    | 'breaking_news'
+    | 'apology'
+    | 'system_update'
     | 'fake_commercial'
-    | 'weekend_update'
-    | 'cult_rehearsal'
-    | 'weird_role'
-    | 'random_stupid'
     | 'celit_viral';
 
 export type SketchRole =
-    | 'cult_leader'
-    | 'victim'
+    | 'authority'
     | 'spokesperson'
+    | 'recipient'
+    | 'evidence'
+    | 'compliance_officer'
     | 'news_anchor'
-    | 'infomercial_host'
-    | 'motivational_speaker'
     | 'random'
-    | string; // Allow for dynamic celit roles
+    | string;
 
 export type SketchStatus =
     | 'pending'
@@ -63,11 +65,14 @@ export type SketchStatus =
     | 'failed'
     | 'generated';
 
+export type RealityVector = 'WORK_VECTOR' | 'LIFE_VECTOR' | 'FEED_VECTOR';
+
 export interface SketchConfig {
     type: SketchType;
     role: SketchRole;
     dumbnessLevel: number; // 1-10
     customPrompt?: string;
+    scene?: any;
 }
 
 export interface Sketch {
@@ -183,6 +188,11 @@ export interface AppState {
     selectedAvatarId: string | null;
     faceModelStatus: FaceModelStatus;
 
+    // Flow State (CE LIT NEW FLOW)
+    faceCaptureEnabled: boolean;
+    realityVectors: RealityVector[];
+    userPremise: string | null;
+
     // Current sketch creation
     currentConfig: SketchConfig | null;
     currentSketchId: string | null;
@@ -198,6 +208,13 @@ export interface AppState {
     addAvatar: (avatar: UserAvatar) => void;
     setSelectedAvatar: (avatarId: string) => void;
     setFaceModelStatus: (status: FaceModelStatus) => void;
+
+    // Flow Actions
+    setFaceCaptureEnabled: (enabled: boolean) => void;
+    toggleRealityVector: (vector: RealityVector) => void;
+    setRealityVectors: (vectors: RealityVector[]) => void;
+    setUserPremise: (premise: string | null) => void;
+
     setSketchConfig: (config: SketchConfig) => void;
     setCurrentSketch: (sketchId: string) => void;
     updateGenerationStatus: (status: SketchStatus, progress: number) => void;
@@ -213,63 +230,61 @@ export interface AppState {
 
 export const SKETCH_TYPES: SketchTypeCard[] = [
     {
-        type: 'fake_commercial',
-        icon: '🎬',
-        title: 'Fake Commercial',
-        description: 'Absurd product ads nobody asked for',
-        gradient: ['#FF00FF', '#FF6B6B'],
+        type: 'onboarding',
+        icon: '📋',
+        title: 'Onboarding',
+        description: 'Mandatory orientation into the unknown',
+        gradient: ['#1A1A1A', '#333333'],
     },
     {
-        type: 'weekend_update',
-        icon: '📰',
-        title: 'Weekend Update',
-        description: 'Breaking news that breaks reality',
-        gradient: ['#00FFFF', '#0088FF'],
+        type: 'compliance',
+        icon: '⚖️',
+        title: 'Compliance',
+        description: 'Verifying your adherence to standard reality',
+        gradient: ['#1A1A1A', '#333333'],
     },
     {
-        type: 'cult_rehearsal',
-        icon: '🕯️',
-        title: 'Cult Rehearsal',
-        description: 'When the ritual goes horribly wrong',
-        gradient: ['#8B00FF', '#FF00FF'],
+        type: 'customer_support',
+        icon: '🎧',
+        title: 'Support',
+        description: 'A polite confirmation of your status',
+        gradient: ['#1A1A1A', '#333333'],
     },
     {
-        type: 'weird_role',
-        icon: '🎭',
-        title: 'Weird Role',
-        description: 'Characters you never auditioned for',
-        gradient: ['#FFD700', '#FF6B6B'],
+        type: 'breaking_news',
+        icon: '📺',
+        title: 'Alert',
+        description: 'Urgent updates from the administration',
+        gradient: ['#1A1A1A', '#333333'],
     },
     {
-        type: 'random_stupid',
-        icon: '🎲',
-        title: 'Random Stupid',
-        description: 'Let chaos decide your fate',
-        gradient: ['#00FF88', '#00FFFF'],
+        type: 'apology',
+        icon: '✉️',
+        title: 'Statement',
+        description: 'Official regrets for upcoming incidents',
+        gradient: ['#1A1A1A', '#333333'],
     },
 ];
 
 export const ROLES: RoleChip[] = [
-    { role: 'cult_leader', label: 'Cult Leader', emoji: '👑' },
-    { role: 'victim', label: 'Confused Victim', emoji: '😰' },
+    { role: 'authority', label: 'Authority', emoji: '🏢' },
     { role: 'spokesperson', label: 'Spokesperson', emoji: '🎤' },
-    { role: 'news_anchor', label: 'News Anchor', emoji: '📺' },
-    { role: 'infomercial_host', label: 'Infomercial Host', emoji: '🛒' },
-    { role: 'motivational_speaker', label: 'Motivational Speaker', emoji: '🔥' },
-    { role: 'random', label: 'Surprise Me', emoji: '🎲' },
+    { role: 'recipient', label: 'Recipient', emoji: '👤' },
+    { role: 'evidence', label: 'Evidence', emoji: '📂' },
+    { role: 'compliance_officer', label: 'Officer', emoji: '🛡️' },
+    { role: 'news_anchor', label: 'Anchor', emoji: '📺' },
+    { role: 'random', label: 'System Pick', emoji: '🎲' },
 ];
 
 export const LOADING_MESSAGES: LoadingMessage[] = [
-    { text: 'Summoning demons...', emoji: '👹' },
-    { text: 'Convincing AI you\'re worthy...', emoji: '🤖' },
-    { text: 'Rendering your cult destiny...', emoji: '🕯️' },
-    { text: 'Adding lens flares for no reason...', emoji: '✨' },
-    { text: 'Consulting the void...', emoji: '🌀' },
-    { text: 'Acquiring dramatic lighting...', emoji: '💡' },
-    { text: 'Making it dumber...', emoji: '🧠' },
-    { text: 'Injecting maximum absurdity...', emoji: '🎪' },
-    { text: 'Calibrating chaos levels...', emoji: '⚡' },
-    { text: 'Your face is being weaponized...', emoji: '🔫' },
-    { text: 'Generating Netflix-tier cringe...', emoji: '🎬' },
-    { text: 'Awakening dormant meme energy...', emoji: '🐸' },
+    { text: 'Establishing credibility...', emoji: '🏢' },
+    { text: 'Verifying identity clearance...', emoji: '🔐' },
+    { text: 'Processing institutional artifacts...', emoji: '📂' },
+    { text: 'Calibrating procedural reality...', emoji: '⚖️' },
+    { text: 'Generating evidence of participation...', emoji: '📹' },
+    { text: 'Extracting verdict receipt...', emoji: '🧾' },
+    { text: 'Reviewing compliance standards...', emoji: '📋' },
+    { text: 'Scheduling necessary discomfort...', emoji: '🌩️' },
+    { text: 'Finalizing the implication...', emoji: '📌' },
+    { text: 'Hard cutting to resolution...', emoji: '✂️' },
 ];

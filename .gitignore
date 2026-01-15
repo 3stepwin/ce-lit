@@ -31,7 +31,12 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+.env.local
+.env.*.local
 login variables
+.env.development.local
+.env.test.local
+.env.production.local
 
 # typescript
 *.tsbuildinfo
@@ -44,4 +49,29 @@ login variables
 test-app/node_modules/
 test-app/.expo/
 AbsurditySketchMachine/node_modules/
-AbsurditySketchMachine/.expo/
+AbsurditySketchMachine/.expo/supabase/.temp/
+AbsurditySketchMachine/.agent/
+
+# API Keys and Secrets (safety backup)
+*.key
+*.pem
+secrets/
+private/
+
+# Logs and outputs
+*.log
+npm_install_log.txt
+push_log*.txt
+tunnel_output.txt
+expo_output*.txt
+
+# IDE and editor files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Build and cache
+build/
+.cache/
+dist/

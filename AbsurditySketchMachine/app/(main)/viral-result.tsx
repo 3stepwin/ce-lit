@@ -1,208 +1,386 @@
 // ========================================
-// VIRAL RESULT SCREEN - CELIT VIRAL SYSTEM
+// FINAL STATE - CULT ENGINE REALITY
 // ========================================
-import { useState, useRef, useEffect } from 'react';
-import { View, Text, Pressable, Dimensions, ScrollView, Animated, Share } from 'react-native';
+// Screen 6 of 6 - authoritative flow
+// Aesthetic: Release Record / Evidence Artifact
+
+import React, { useState, useRef, useEffect } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Pressable,
+    Dimensions,
+    ScrollView,
+    Animated,
+    Share,
+    StatusBar
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Video, ResizeMode } from 'expo-av';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
-import * as Clipboard from 'expo-clipboard';
-import { useSketch } from '../../hooks/useSketch';
-import { VIRAL_SHARE_COPY, SCREENSHOT_MOMENTS } from '../../types/celit';
+import { COLORS } from '../../lib/constants';
+import { useAppStore } from '../../store/useAppStore';
+import { supabase } from '../../lib/supabase';
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function ViralResultScreen() {
     const router = useRouter();
-    const { sketchId } = useLocalSearchParams<{ sketchId: string }>();
-    const { getSketchById } = useSketch();
-    const sketch = sketchId ? getSketchById(sketchId) : null;
-    const content = sketch?.content as any;
+    const { jobId } = useLocalSearchParams<{ jobId: string }>(); // Use jobId
+    const { setRealityVectors, setCurrentSketch, updateGenerationStatus } = useAppStore();
 
-    const [isPlaying, setIsPlaying] = useState(true);
-    const [selectedShareCopy, setSelectedShareCopy] = useState(content?.caption_pack?.[0] || VIRAL_SHARE_COPY[0]);
-    const [showDeletedLine, setShowDeletedLine] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(content?.runtime_target_sec ? content.runtime_target_sec * 10 : 3600); // Psychological countdown
+    // Local state for direct fetching
+    const [jobData, setJobData] = useState<any>(null); // Raw celit_jobs row
+    const [loading, setLoading] = useState(true);
 
-    const videoRef = useRef<Video>(null);
+    const sketch = {
+        videoUrl: jobData?.result_video_url,
+        // Mimic other fields if needed, or use jobData directly
+    };
+    const content = jobData?.content;
+    const verdict = jobData?.screenshot_frame_text || content?.screenshot_frame_text || "THE RECORD IS LOCKED.";
+
+    // Fetch from celit_jobs on mount
+    useEffect(() => {
+        const fetchJob = async () => {
+            if (!jobId) return;
+            const { data, error } = await supabase
+                .from('celit_jobs')
+                .select('*')
+                .eq('id', jobId)
+                .single();
+
+            if (data) {
+                setJobData(data);
+            }
+            setLoading(false);
+        };
+        fetchJob();
+    }, [jobId]);
+
+    // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const implicationAnim = useRef(new Animated.Value(0)).current;
+    const punchlineAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
-        // Trigger implication banner slightly after load
+        Animated.timing(fadeAnim, { toValue: 1, duration: 1000, useNativeDriver: true }).start();
+
+        // Delay punchline appearance for dramatic effect
         setTimeout(() => {
-            Animated.spring(implicationAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }).start();
+            Animated.spring(punchlineAnim, {
+                toValue: 1,
+                friction: 6,
+                tension: 40,
+                useNativeDriver: true
+            }).start();
         }, 2000);
-
-        // Psychological Retention Timer
-        const timer = setInterval(() => {
-            setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-        }, 1000);
-        return () => clearInterval(timer);
     }, []);
-
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-        if (status.isLoaded && status.didJustFinish) {
-            videoRef.current?.replayAsync();
-        }
-    };
 
     const handleShare = async () => {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         try {
-            if (sketch?.videoUrl && (await Sharing.isAvailableAsync())) {
-                await Sharing.shareAsync(sketch.videoUrl, { dialogTitle: selectedShareCopy });
-            } else {
-                await Share.share({ message: `${selectedShareCopy}\n\n${sketch?.videoUrl}` });
+            if (sketch?.videoUrl) {
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(sketch.videoUrl, {
+                        dialogTitle: content?.caption_pack?.[0] || "CE LIT // PROOF_ARTIFACT"
+                    });
+                } else {
+                    await Share.share({
+                        message: `${content?.caption_pack?.[0] || 'Verification required.'}\n\n${sketch.videoUrl}`
+                    });
+                }
             }
-        } catch (error) { console.error('Share error:', error); }
-    };
-
-    const handleCopyDeletedLine = async () => {
-        if (content?.deleted_line) {
-            await Clipboard.setStringAsync(content.deleted_line);
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setShowDeletedLine(true);
-            setTimeout(() => setShowDeletedLine(false), 3000);
+        } catch (error) {
+            console.error('Share error:', error);
         }
     };
 
-    const aestheticLabels: Record<string, string> = {
-        prestige_clean: 'PRESTIGE CLEAN // 4K',
-        corporate_dystopia: 'CORPORATE DYSTOPIA // CCT',
-        analog_rot: 'ANALOG ROT // VHS',
-        liminal_dream: 'LIMINAL DREAM // VOID',
+    const handleDownload = async () => {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        // On mobile, the share sheet usually contains "Save Video" 
+        handleShare();
+    };
+
+    const handleRunAgain = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        setRealityVectors([]); // Clear selection to force user to choose again
+        setCurrentSketch(null); // Clear current sketch context
+        updateGenerationStatus('pending', 0); // Reset status
+        router.replace('/system-threshold');
     };
 
     return (
-        <Animated.View style={{ flex: 1, opacity: fadeAnim }} className="bg-background">
-            <ScrollView className="flex-1" stickyHeaderIndices={[0]}>
-                {/* Header Artifact Tag */}
-                <View className="bg-background/80 pt-12 pb-2 px-6 backdrop-blur-md border-b border-surface/30 flex-row justify-between items-center z-50">
-                    <Text className="text-textMuted font-mono text-[10px] tracking-widest uppercase">
-                        {aestheticLabels[content?.aesthetic_preset] || 'CELIT ARCHIVE // LOCKED'}
-                    </Text>
-                    <Pressable onPress={() => router.back()} className="w-8 h-8 rounded-full items-center justify-center bg-surface">
-                        <Text className="text-white text-xs">✕</Text>
-                    </Pressable>
-                </View>
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" />
 
-                {/* Main Video Port */}
-                <Pressable onPress={() => { videoRef.current?.replayAsync(); setIsPlaying(true); }} style={{ height: height * 0.5 }} className="relative bg-black">
-                    <Video
-                        ref={videoRef}
-                        source={{ uri: sketch?.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' }}
-                        style={{ flex: 1 }}
-                        resizeMode={ResizeMode.COVER}
-                        shouldPlay={isPlaying}
-                        isLooping={true}
-                        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-                    />
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <Animated.View style={[styles.main, { opacity: fadeAnim }]}>
 
-                    {/* Proof Artifact Overlay (Screenshot Moment) */}
-                    <View className="absolute bottom-6 left-4 right-4 items-center">
-                        <View className="bg-black/90 p-4 border border-primary/50 shadow-glow">
-                            <Text className="text-primary text-xl font-black uppercase tracking-tighter text-center" style={{ fontFamily: 'monospace' }}>
-                                "{content?.screenshot_frame_text || 'YOU ALREADY AGREED.'}"
-                            </Text>
-                            <Text className="text-primary/40 text-[8px] text-center mt-1 tracking-widest font-mono">PROOF_ARTIFACT_ID: {sketchId?.slice(0, 8).toUpperCase()}</Text>
+                    {/* Header Protocol Tag */}
+                    <View style={styles.header}>
+                        <View style={styles.badge}>
+                            <View style={styles.liveDot} />
+                            <Text style={styles.badgeText}>ARTIFACT_LIVE</Text>
                         </View>
+                        <Text style={styles.idStamp}>ID: {jobId?.slice(0, 8).toUpperCase()}</Text>
                     </View>
 
-                    {/* Artifact Watermark (Purple Cow #1) */}
-                    <View className="absolute top-4 right-4 opacity-50 pointer-events-none">
-                        <Text className="text-white/20 text-[8px] font-mono tracking-widest rotate-90 origin-top-right">
-                            OFFICIAL ARCHIVE // {sketchId?.slice(0, 6).toUpperCase()}
-                        </Text>
+                    {/* Main Video Port */}
+                    <View style={styles.videoPort}>
+                        <Video
+                            source={{ uri: sketch?.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' }}
+                            style={styles.video}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay
+                            isLooping
+                        />
+
+                        {/* Punchline Overlay (The Verdict) */}
+                        <Animated.View style={[
+                            styles.punchlineOverlay,
+                            {
+                                opacity: punchlineAnim,
+                                transform: [{ scale: punchlineAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }]
+                            }
+                        ]}>
+                            <View style={styles.punchlineBox}>
+                                <Text style={styles.punchlineText}>
+                                    "{content?.screenshot_frame_text || 'THE RECORD IS LOCKED.'}"
+                                </Text>
+                            </View>
+                        </Animated.View>
+
+                        {/* Scan UI Lines */}
+                        <View style={[styles.corner, styles.topLeft]} />
+                        <View style={[styles.corner, styles.topRight]} />
+                        <View style={[styles.corner, styles.bottomLeft]} />
+                        <View style={[styles.corner, styles.bottomRight]} />
                     </View>
-                </Pressable>
 
-                {/* Psychology Stack UI */}
-                <View className="px-6 py-6 pb-20">
-                    {/* Enrollment Banner */}
-                    <Animated.View style={{
-                        opacity: implicationAnim,
-                        transform: [{ translateY: implicationAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }]
-                    }}
-                        className="bg-primary/10 border-l-4 border-primary p-4 mb-6">
-                        <Text className="text-primary font-bold text-lg">ENROLLMENT CONFIRMED</Text>
-                        <Text className="text-white/70 text-sm mt-1">Viewing constitutes acceptance of the new terms. Your participation has been documented for the 2026 record.</Text>
-
-                        {/* Psychological Retention Countdown (Purple Cow #3) */}
-                        <View className="mt-3 bg-black/40 p-2 rounded flex-row items-center justify-between">
-                            <Text className="text-white/50 text-[10px] uppercase tracking-widest">Mandatory Renewal In:</Text>
-                            <Text className="text-warning font-mono text-xs font-bold">{formatTime(timeLeft)}</Text>
-                        </View>
-                    </Animated.View>
-
-                    {/* Viral Trinity Section: Outtakes */}
-                    <Text className="text-textMuted text-[10px] font-mono mb-3 tracking-widest uppercase">// VIRAL TRINITY: OUTTAKES (ALGO-AMMO)</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-8 overflow-visible">
-                        {(content?.outtakes || [{ hook: 'Refund requested.' }, { hook: 'Exit blocked.' }]).map((ot: any, i: number) => (
-                            <Pressable
-                                key={i}
-                                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                                className="w-40 mr-4 aspect-[9/16] bg-surface rounded-xl overflow-hidden border border-white/10 items-center justify-center p-4"
-                            >
-                                <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.8)']} className="absolute inset-0 z-10" />
-                                <Text className="text-white font-bold text-center text-xs z-20">"{ot.hook}"</Text>
-                                <View className="absolute bottom-3 left-3 bg-primary px-2 py-0.5 rounded-full z-20">
-                                    <Text className="text-black text-[8px] font-bold">OUTTAKE</Text>
+                    {/* Outtakes / Caption Bank */}
+                    <View style={styles.outtakesSection}>
+                        <Text style={styles.sectionLabel}>// VIRAL_OUTTAKES</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.outtakesList}>
+                            {(content?.outtakes || [{ hook: 'Exit blocked.' }, { hook: 'Refund denied.' }]).map((ot: any, i: number) => (
+                                <View key={i} style={styles.outtakeCard}>
+                                    <Text style={styles.outtakeText}>"{ot.hook}"</Text>
+                                    <Text style={styles.outtakeLabel}>REJECTED_OUTCOME</Text>
                                 </View>
-                            </Pressable>
-                        ))}
-                    </ScrollView>
-
-                    {/* Share Accelerants */}
-                    <Text className="text-textMuted text-[10px] font-mono mb-3 tracking-widest uppercase">// CAPTION PACK</Text>
-                    <View className="flex-row flex-wrap gap-2 mb-8">
-                        {(content?.caption_pack || VIRAL_SHARE_COPY).map((copy: string, i: number) => (
-                            <Pressable
-                                key={i}
-                                onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    setSelectedShareCopy(copy);
-                                }}
-                                className={`px-4 py-2 rounded-full border ${selectedShareCopy === copy ? 'bg-primary border-primary' : 'bg-surface border-white/10'}`}
-                            >
-                                <Text className={`text-xs font-medium ${selectedShareCopy === copy ? 'text-black' : 'text-white'}`}>"{copy}"</Text>
-                            </Pressable>
-                        ))}
+                            ))}
+                        </ScrollView>
                     </View>
 
-                    {/* Secret Weapon: Deleted Line */}
-                    <Text className="text-textMuted text-[10px] font-mono mb-3 tracking-widest uppercase">// SECRET WEAPON (COMMENT FUEL)</Text>
-                    <Pressable
-                        onPress={handleCopyDeletedLine}
-                        className="bg-surface border-2 border-dashed border-white/20 p-4 rounded-xl items-center"
-                    >
-                        <Text className="text-white/40 text-[10px] text-center mb-1 uppercase">Copy "Deleted Line" to fuel the comments section:</Text>
-                        <Text className="text-white font-mono text-center italic text-sm" numberOfLines={1}>
-                            {showDeletedLine ? "ARTIFACT COPIED TO CLIPBOARD" : `"${content?.deleted_line || 'Escalation is not recommended.'}"`}
-                        </Text>
-                    </Pressable>
+                    {/* Action Hub */}
+                    <View style={styles.actions}>
+                        <Pressable onPress={handleShare} style={styles.primaryBtn}>
+                            <Text style={styles.primaryBtnText}>SHARE PROOF</Text>
+                        </Pressable>
 
-                    {/* Global Execution Button */}
-                    <Pressable onPress={handleShare} className="mt-10 rounded-2xl overflow-hidden shadow-glow">
-                        <LinearGradient colors={['#FF00FF', '#00FFFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} className="py-5">
-                            <Text className="text-white text-center text-xl font-black uppercase tracking-widest">PUBLISH TO TIMELINE</Text>
-                        </LinearGradient>
-                    </Pressable>
+                        <Pressable onPress={handleDownload} style={styles.secondaryBtn}>
+                            <Text style={styles.secondaryBtnText}>DOWNLOAD ARTIFACT</Text>
+                        </Pressable>
 
-                    <Text className="text-textMuted text-[8px] text-center mt-8 font-mono opacity-30">
-                        OFFICIAL RELEASE // NON-REFUNDABLE // YOU ARE NOT THE FIRST.
-                    </Text>
-                </View>
+                        <Pressable onPress={handleRunAgain} style={styles.terminalBtn}>
+                            <Text style={styles.terminalBtnText}>RUN AGAIN</Text>
+                        </Pressable>
+                    </View>
+
+                </Animated.View>
             </ScrollView>
-        </Animated.View>
+
+            {/* Evidence Disclaimer */}
+            <View style={styles.disclaimer}>
+                <Text style={styles.disclaimerText}>ARTIFACTS ARE PROPERTY OF THE INSTITUTION.</Text>
+            </View>
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.void,
+    },
+    scrollContent: {
+        padding: 24,
+        paddingTop: 60,
+        paddingBottom: 120,
+    },
+    main: {
+        gap: 32,
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    badge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(147, 200, 147, 0.1)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(147, 200, 147, 0.3)',
+    },
+    liveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: COLORS.institutional,
+    },
+    badgeText: {
+        color: COLORS.institutional,
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 1,
+    },
+    idStamp: {
+        color: COLORS.bone,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+        opacity: 0.4,
+    },
+    videoPort: {
+        width: '100%',
+        aspectRatio: 9 / 16,
+        backgroundColor: '#000',
+        position: 'relative',
+        borderRadius: 2,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    video: {
+        flex: 1,
+    },
+    punchlineOverlay: {
+        position: 'absolute',
+        bottom: 40,
+        left: 20,
+        right: 20,
+        alignItems: 'center',
+    },
+    punchlineBox: {
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        padding: 20,
+        borderWidth: 1,
+        borderColor: `${COLORS.institutional}60`,
+        width: '100%',
+    },
+    punchlineText: {
+        color: COLORS.institutional,
+        fontSize: 18,
+        fontWeight: '900',
+        textAlign: 'center',
+        fontFamily: 'monospace',
+        letterSpacing: -1,
+        textTransform: 'uppercase',
+    },
+    outtakesSection: {
+        gap: 12,
+    },
+    sectionLabel: {
+        color: COLORS.bone,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+        opacity: 0.5,
+    },
+    outtakesList: {
+        paddingVertical: 8,
+    },
+    outtakeCard: {
+        width: 160,
+        padding: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+        marginRight: 12,
+        justifyContent: 'space-between',
+        minHeight: 120,
+    },
+    outtakeText: {
+        color: COLORS.bone,
+        fontSize: 12,
+        fontWeight: '500',
+        fontStyle: 'italic',
+        lineHeight: 18,
+    },
+    outtakeLabel: {
+        color: COLORS.institutional,
+        fontSize: 8,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+        marginTop: 12,
+    },
+    actions: {
+        gap: 16,
+        marginTop: 8,
+    },
+    primaryBtn: {
+        backgroundColor: COLORS.institutional, // Sharing the proof is the primary institutional action
+        paddingVertical: 20,
+        alignItems: 'center',
+        borderRadius: 2,
+    },
+    primaryBtnText: {
+        color: COLORS.void,
+        fontSize: 18,
+        fontWeight: '900',
+        letterSpacing: 4,
+    },
+    secondaryBtn: {
+        borderWidth: 1,
+        borderColor: 'rgba(226, 218, 196, 0.3)',
+        paddingVertical: 18,
+        alignItems: 'center',
+    },
+    secondaryBtnText: {
+        color: COLORS.bone,
+        fontSize: 14,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+        opacity: 0.8,
+    },
+    terminalBtn: {
+        paddingVertical: 12,
+        alignItems: 'center',
+        opacity: 0.4,
+    },
+    terminalBtnText: {
+        color: COLORS.bone,
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+    disclaimer: {
+        position: 'absolute',
+        bottom: 30,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        opacity: 0.2,
+    },
+    disclaimerText: {
+        color: COLORS.bone,
+        fontSize: 8,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+    corner: {
+        position: 'absolute',
+        width: 20,
+        height: 20,
+        borderColor: COLORS.bone,
+        opacity: 0.3,
+    },
+    topLeft: { top: 10, left: 10, borderTopWidth: 1, borderLeftWidth: 1 },
+    topRight: { top: 10, right: 10, borderTopWidth: 1, borderRightWidth: 1 },
+    bottomLeft: { bottom: 10, left: 10, borderBottomWidth: 1, borderLeftWidth: 1 },
+    bottomRight: { bottom: 10, right: 10, borderBottomWidth: 1, borderRightWidth: 1 },
+});

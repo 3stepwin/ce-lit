@@ -12,7 +12,8 @@ import type {
     SketchConfig,
     SketchStatus,
     FaceModelStatus,
-    AppState
+    AppState,
+    RealityVector
 } from '../types';
 
 // ========================================
@@ -24,6 +25,11 @@ const initialState = {
     user: null as User | null,
     isAuthenticated: false,
     isLoading: true,
+
+    // Flow State (CE LIT NEW FLOW)
+    faceCaptureEnabled: false,
+    realityVectors: [] as RealityVector[],
+    userPremise: null as string | null,
 
     // Avatar
     avatars: [] as UserAvatar[],
@@ -46,46 +52,67 @@ const initialState = {
 
 export const useAppStore = create<AppState>()(
     persist(
-        (set, get) => ({
+        (set: any, get: any) => ({
             ...initialState,
 
             // ========================================
             // AUTH ACTIONS
             // ========================================
 
-            setUser: (user) => set({
+            setUser: (user: User | null) => set({
                 user,
                 isAuthenticated: !!user,
                 isLoading: false,
             }),
 
-            setLoading: (isLoading) => set({ isLoading }),
+            setLoading: (isLoading: boolean) => set({ isLoading }),
+
+            // ========================================
+            // FLOW ACTIONS
+            // ========================================
+
+            setFaceCaptureEnabled: (enabled: boolean) => set({ faceCaptureEnabled: enabled }),
+
+            setRealityVectors: (vectors: RealityVector[]) => set({ realityVectors: vectors }),
+
+            setUserPremise: (premise: string | null) => set({ userPremise: premise }),
+
+            toggleRealityVector: (vector: RealityVector) => set((state: AppState) => {
+                const vectors = [...state.realityVectors];
+                const index = vectors.indexOf(vector);
+                if (index > -1) {
+                    vectors.splice(index, 1);
+                } else {
+                    vectors.push(vector);
+                }
+                return { realityVectors: vectors };
+            }),
 
             // ========================================
             // AVATAR ACTIONS
             // ========================================
 
-            addAvatar: (avatar) => set((state) => ({
+            addAvatar: (avatar: UserAvatar) => set((state: AppState) => ({
                 avatars: [...state.avatars, avatar],
             })),
 
-            setSelectedAvatar: (avatarId) => set({ selectedAvatarId: avatarId }),
+            setSelectedAvatar: (avatarId: string | null) => set({ selectedAvatarId: avatarId }),
 
-            setFaceModelStatus: (status) => set({ faceModelStatus: status }),
+            setFaceModelStatus: (status: FaceModelStatus) => set({ faceModelStatus: status }),
 
             // ========================================
             // SKETCH CONFIG ACTIONS
             // ========================================
 
-            setSketchConfig: (config) => set({ currentConfig: config }),
+            setSketchConfig: (config: SketchConfig | null) => set({ currentConfig: config }),
 
-            setCurrentSketch: (sketchId) => set({
+            setCurrentSketch: (sketchId: string | null) => set({
                 currentSketchId: sketchId,
                 generationStatus: 'pending',
                 generationProgress: 0,
             }),
 
-            updateGenerationStatus: (status, progress) => set({
+            updateGenerationStatus: (status: SketchStatus, progress: number) => set({
                 generationStatus: status,
                 generationProgress: progress,
             }),
@@ -94,17 +121,17 @@ export const useAppStore = create<AppState>()(
             // SKETCH GALLERY ACTIONS
             // ========================================
 
-            addSketch: (sketch) => set((state) => ({
+            addSketch: (sketch: Sketch) => set((state: AppState) => ({
                 sketches: [sketch, ...state.sketches],
             })),
 
-            updateSketch: (sketchId, updates) => set((state) => ({
-                sketches: state.sketches.map((s) =>
+            updateSketch: (sketchId: string, updates: Partial<Sketch>) => set((state: AppState) => ({
+                sketches: state.sketches.map((s: Sketch) =>
                     s.id === sketchId ? { ...s, ...updates } : s
                 ),
             })),
 
-            setSketches: (sketches) => set({ sketches }),
+            setSketches: (sketches: Sketch[]) => set({ sketches }),
 
             // ========================================
             // RESET

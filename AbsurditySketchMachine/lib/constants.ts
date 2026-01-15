@@ -20,6 +20,14 @@ export const COLORS = {
     text: '#FFFFFF',
     textMuted: '#888899',
     textSubtle: '#555566',
+
+    // Cult Engine Reality Specs
+    bone: '#E2DAC4',
+    boneDark: '#AFA895',
+    void: '#09090B',
+    graphite: '#1C1C1E',
+    institutional: '#93C893',
+    tape: '#FFD700',
 } as const;
 
 // Gradients

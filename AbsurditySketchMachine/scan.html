@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absurdity AI - Scan to Open</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0A0A0F;
+            color: #93C893;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+        }
+
+        h1 {
+            font-size: 32px;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+            color: #E8E4D9;
+        }
+
+        h2 {
+            font-size: 14px;
+            letter-spacing: 2px;
+            margin-bottom: 40px;
+            opacity: 0.7;
+        }
+
+        .qr-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 20px 0;
+        }
+
+        #qr-code {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .instructions {
+            margin-top: 30px;
+            font-size: 14px;
+            line-height: 1.8;
+            opacity: 0.8;
+        }
+
+        .url {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(147, 200, 147, 0.1);
+            border: 1px solid rgba(147, 200, 147, 0.3);
+            border-radius: 4px;
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .status {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #93C893;
+        }
+
+        .manual {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(232, 228, 217, 0.05);
+            border-radius: 4px;
+        }
+
+        .manual input {
+            background: #1A1A1F;
+            border: 1px solid #93C893;
+            color: #93C893;
+            padding: 10px;
+            width: 200px;
+            font-family: 'Courier New', monospace;
+            margin: 10px;
+        }
+
+        .manual button {
+            background: #93C893;
+            color: #0A0A0F;
+            border: none;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .manual button:hover {
+            background: #A8DDA8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>ABSURDITY AI SKETCH MACHINE</h1>
+        <h2>SYSTEM ACCESS PORTAL</h2>
+
+        <div class="qr-container">
+            <img id="qr-code" src="" alt="QR Code Loading...">
+        </div>
+
+        <div class="instructions">
+            <p>→ Open Expo Go on your device</p>
+            <p>→ Scan the QR code above</p>
+            <p>→ Wait for app to load</p>
+        </div>
+
+        <div class="url" id="expo-url">
+            Detecting Expo URL...
+        </div>
+
+        <div class="status" id="status">
+            ● DETECTING IP ADDRESS...
+        </div>
+
+        <div class="manual">
+            <p>Manual IP Entry (if auto-detect fails):</p>
+            <input type="text" id="ip-input" placeholder="10.0.0.118" value="10.0.0.118">
+            <button onclick="updateQR()">UPDATE QR CODE</button>
+        </div>
+    </div>
+
+    <script>
+        async function getLocalIP() {
+            return new Promise((resolve) => {
+                const pc = new RTCPeerConnection({ iceServers: [] });
+                pc.createDataChannel('');
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                pc.onicecandidate = (ice) => {
+                    if (!ice || !ice.candidate || !ice.candidate.candidate) {
+                        return;
+                    }
+                    const match = /([0-9]{1,3}\.){3}[0-9]{1,3}/.exec(ice.candidate.candidate);
+                    if (match) {
+                        pc.close();
+                        resolve(match[0]);
+                    }
+                };
+
+                setTimeout(() => {
+                    pc.close();
+                    resolve('10.0.0.118');
+                }, 2000);
+            });
+        }
+
+        function generateQRCode(url) {
+            const encodedUrl = encodeURIComponent(url);
+            const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedUrl}`;
+            document.getElementById('qr-code').src = qrApiUrl;
+        }
+
+        function updateQR() {
+            const ip = document.getElementById('ip-input').value;
+            const expoUrl = `exp://${ip}:8082`;
+            document.getElementById('expo-url').textContent = expoUrl;
+            generateQRCode(expoUrl);
+            document.getElementById('status').innerHTML = '● READY TO SCAN';
+        }
+
+        async function init() {
+            try {
+                document.getElementById('status').innerHTML = '● DETECTING IP ADDRESS...';
+                const localIP = await getLocalIP();
+                document.getElementById('ip-input').value = localIP;
+                const expoUrl = `exp://${localIP}:8082`;
+
+                document.getElementById('expo-url').textContent = expoUrl;
+                generateQRCode(expoUrl);
+                document.getElementById('status').innerHTML = '● READY TO SCAN';
+            } catch (e) {
+                document.getElementById('status').innerHTML = '● ERROR: ' + e.message;
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

@@ -1,349 +1,312 @@
 // ========================================
-// AVATAR CAPTURE SCREEN - ABSURDITY AI SKETCH MACHINE
+// FACE CAPTURE PROTOCOL - CULT ENGINE REALITY
 // ========================================
-// Agent: Developer Amelia (EMDADF Phase 6)
-// Story: STORY-015-022 - Avatar Capture Flow
+// Screen 4 of 6 - authoritative flow
+// Aesthetic: Biometric Ritual / Institutional Void
 
-import { useState, useRef, useEffect } from 'react';
-import { View, Text, Pressable, Image, Animated, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Pressable,
+    Animated,
+    Dimensions,
+    Image,
+    ActivityIndicator,
+    StatusBar
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { LinearGradient } from 'expo-linear-gradient';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { useAvatar } from '../../hooks/useAvatar';
 import { COLORS } from '../../lib/constants';
+import { useAvatar } from '../../hooks/useAvatar';
 
 const { width, height } = Dimensions.get('window');
 
-export default function AvatarScreen() {
+export default function FaceCaptureProtocolScreen() {
     const router = useRouter();
     const [permission, requestPermission] = useCameraPermissions();
     const cameraRef = useRef<any>(null);
 
     const {
-        avatars,
-        faceModelStatus,
-        isUploading,
-        uploadProgress,
-        isAvatarReady,
-        canCreateFaceModel,
         captureSelfie,
-        pickFromGallery,
         uploadAvatarImage,
-        createFaceModel,
+        isUploading
     } = useAvatar();
 
-    const [capturedImages, setCapturedImages] = useState<string[]>([]);
-    const [isCapturing, setIsCapturing] = useState(false);
-    const [showCamera, setShowCamera] = useState(false);
+    const [capturedUri, setCapturedUri] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     // Animations
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const overlayAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Pulse animation for capture button
         Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1.1,
-                    duration: 1000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
-                    duration: 1000,
-                    useNativeDriver: true,
-                }),
+                Animated.timing(pulseAnim, { toValue: 1.05, duration: 2000, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 2000, useNativeDriver: true })
             ])
         ).start();
     }, []);
 
     const handleCapture = async () => {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         const uri = await captureSelfie();
         if (uri) {
-            setCapturedImages((prev) => [...prev, uri]);
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setCapturedUri(uri);
         }
     };
 
-    const handlePickFromGallery = async () => {
-        const uri = await pickFromGallery();
-        if (uri) {
-            setCapturedImages((prev) => [...prev, uri]);
+    const handleUpload = async () => {
+        if (!capturedUri) return;
+
+        setIsProcessing(true);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        try {
+            await uploadAvatarImage(capturedUri);
+            // Navigate to Screen 5
+            router.push('/(main)/generating');
+        } catch (e) {
+            console.error("Upload failed", e);
+            setIsProcessing(false);
         }
     };
 
-    const handleUploadAll = async () => {
-        for (const uri of capturedImages) {
-            await uploadAvatarImage(uri);
-        }
-        setCapturedImages([]);
-
-        // Trigger face model creation
-        if (canCreateFaceModel || avatars.length > 0) {
-            await createFaceModel();
-        }
+    const handleRetake = () => {
+        setCapturedUri(null);
+        Haptics.selectionAsync();
     };
 
-    const handleRemoveImage = (index: number) => {
-        setCapturedImages((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    // Permission not granted
-    if (!permission) {
-        return (
-            <View className="flex-1 bg-background justify-center items-center px-6">
-                <Text className="text-white text-xl text-center">
-                    Loading camera...
-                </Text>
-            </View>
-        );
-    }
+    if (!permission) return <View style={styles.container} />;
 
     if (!permission.granted) {
         return (
-            <View className="flex-1 bg-background justify-center items-center px-6">
-                <Text className="text-6xl mb-4">📷</Text>
-                <Text className="text-white text-2xl font-bold text-center mb-2">
-                    Camera Access Required
-                </Text>
-                <Text className="text-textMuted text-center mb-8">
-                    We need your camera to capture selfies for your AI avatar
-                </Text>
-                <Pressable
-                    onPress={requestPermission}
-                    className="bg-primary px-8 py-4 rounded-xl"
-                >
-                    <Text className="text-white font-bold text-lg">
-                        Grant Camera Access
-                    </Text>
-                </Pressable>
-            </View>
-        );
-    }
-
-    // Already has avatar ready
-    if (isAvatarReady && !showCamera) {
-        return (
-            <View className="flex-1 bg-background px-6 pt-16">
-                <Text className="text-4xl font-bold text-white mb-2">
-                    YOUR AVATAR
-                </Text>
-                <View className="bg-success/20 border border-success rounded-xl p-4 mb-8">
-                    <Text className="text-success text-center font-bold">
-                        ✅ Face model ready! You can create sketches.
-                    </Text>
-                </View>
-
-                {/* Avatar Preview Grid */}
-                <View className="flex-row flex-wrap gap-4 mb-8">
-                    {avatars.map((avatar, index) => (
-                        <View
-                            key={avatar.id}
-                            className="w-24 h-24 rounded-xl overflow-hidden border-2 border-primary"
-                        >
-                            <Image
-                                source={{ uri: avatar.publicUrl }}
-                                className="w-full h-full"
-                                resizeMode="cover"
-                            />
-                        </View>
-                    ))}
-                </View>
-
-                {/* Add More Button */}
-                <Pressable
-                    onPress={() => setShowCamera(true)}
-                    className="bg-surface border border-accent rounded-xl p-4 mb-4"
-                >
-                    <Text className="text-accent text-center font-bold">
-                        📸 Add More Photos
-                    </Text>
-                </Pressable>
-
-                {/* Continue to Create */}
-                <Pressable
-                    onPress={() => router.push('/(main)/create')}
-                    className="rounded-xl overflow-hidden"
-                >
-                    <LinearGradient
-                        colors={['#FF00FF', '#00FFFF']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        className="py-5"
-                    >
-                        <Text className="text-white text-center text-xl font-bold">
-                            🎬 START CREATING
-                        </Text>
-                    </LinearGradient>
-                </Pressable>
-            </View>
-        );
-    }
-
-    // Face model processing
-    if (faceModelStatus === 'processing') {
-        return (
-            <View className="flex-1 bg-background justify-center items-center px-6">
-                <Animated.Text
-                    style={{
-                        transform: [{ scale: pulseAnim }],
-                    }}
-                    className="text-6xl mb-4"
-                >
-                    🧬
-                </Animated.Text>
-                <Text className="text-white text-2xl font-bold text-center mb-2">
-                    Creating Your Face Model
-                </Text>
-                <Text className="text-textMuted text-center mb-8">
-                    Our AI is learning your unique features...
-                </Text>
-                <View className="w-full bg-surface h-3 rounded-full overflow-hidden">
-                    <Animated.View
-                        className="bg-primary h-full"
-                        style={{ width: '60%' }}
-                    />
+            <View style={styles.container}>
+                <View style={styles.centerContent}>
+                    <Text style={styles.title}>PERMISSION REQUIRED</Text>
+                    <Pressable onPress={requestPermission} style={styles.button}>
+                        <Text style={styles.buttonText}>GRANT ACCESS</Text>
+                    </Pressable>
                 </View>
             </View>
         );
     }
 
     return (
-        <View className="flex-1 bg-background">
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" />
+
             {/* Header */}
-            <View className="px-6 pt-16 pb-4 z-10">
-                <Text className="text-3xl font-bold text-white mb-1">
-                    CAPTURE YOUR FACE
-                </Text>
-                <Text className="text-textMuted">
-                    Take 1-3 selfies to create your AI avatar
-                </Text>
+            <View style={styles.header}>
+                <Text style={styles.headerText}>PROTOCOL: FACE_CAPTURE</Text>
+                <Text style={styles.headerText}>ID: CE_LIT_VOID_04</Text>
+            </View>
 
-                {/* Tape Label */}
-                <View className="bg-warning mt-4 px-4 py-2 self-start -rotate-1">
-                    <Text className="text-black font-bold text-xs tracking-widest">
-                        🎯 CENTER YOUR FACE
-                    </Text>
+            <View style={styles.main}>
+                <View style={styles.cameraContainer}>
+                    {capturedUri ? (
+                        <Image source={{ uri: capturedUri }} style={styles.preview} />
+                    ) : (
+                        <CameraView ref={cameraRef} style={styles.camera} facing="front">
+                            <View style={styles.overlay}>
+                                <Animated.View style={[styles.oval, { transform: [{ scale: pulseAnim }] }]} />
+                            </View>
+                        </CameraView>
+                    )}
+
+                    {/* Corners */}
+                    <View style={[styles.corner, styles.topLeft]} />
+                    <View style={[styles.corner, styles.topRight]} />
+                    <View style={[styles.corner, styles.bottomLeft]} />
+                    <View style={[styles.corner, styles.bottomRight]} />
+                </View>
+
+                <View style={styles.instructionBox}>
+                    <Text style={styles.instructionText}>DO NOT LOOK AWAY.</Text>
+                    <Text style={styles.instructionSubtext}>POSITION FACIAL STRUCTURE WITHIN THE VOID.</Text>
                 </View>
             </View>
 
-            {/* Camera or Preview Area */}
-            <View className="flex-1 mx-6 rounded-3xl overflow-hidden border-2 border-primary">
-                {showCamera || capturedImages.length === 0 ? (
-                    <CameraView
-                        ref={cameraRef}
-                        style={{ flex: 1 }}
-                        facing="front"
-                    >
-                        {/* Face Alignment Overlay */}
-                        <View className="flex-1 justify-center items-center">
-                            <View
-                                className="w-64 h-80 border-4 border-white/50 rounded-[100px]"
-                                style={{
-                                    borderStyle: 'dashed',
-                                }}
-                            />
-                            <Text className="text-white/70 text-center mt-4 font-medium">
-                                Position your face in the oval
-                            </Text>
-                        </View>
-
-                        {/* Capture Button */}
-                        <View className="absolute bottom-8 left-0 right-0 items-center">
-                            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                                <Pressable
-                                    onPress={handleCapture}
-                                    disabled={isCapturing}
-                                    className="w-20 h-20 rounded-full bg-white border-4 border-primary items-center justify-center"
-                                >
-                                    <View className="w-16 h-16 rounded-full bg-primary" />
-                                </Pressable>
-                            </Animated.View>
-                        </View>
-                    </CameraView>
-                ) : (
-                    // Preview captured images
-                    <View className="flex-1 bg-surface">
-                        <View className="flex-1 flex-row flex-wrap p-4 gap-4">
-                            {capturedImages.map((uri, index) => (
-                                <Pressable
-                                    key={index}
-                                    onPress={() => handleRemoveImage(index)}
-                                    className="relative"
-                                >
-                                    <Image
-                                        source={{ uri }}
-                                        className="w-28 h-28 rounded-xl"
-                                        resizeMode="cover"
-                                    />
-                                    <View className="absolute top-1 right-1 bg-error w-6 h-6 rounded-full items-center justify-center">
-                                        <Text className="text-white text-xs">✕</Text>
-                                    </View>
-                                </Pressable>
-                            ))}
-
-                            {/* Add more button */}
-                            {capturedImages.length < 3 && (
-                                <Pressable
-                                    onPress={() => setShowCamera(true)}
-                                    className="w-28 h-28 rounded-xl bg-surfaceHover border-2 border-dashed border-textMuted items-center justify-center"
-                                >
-                                    <Text className="text-4xl">📷</Text>
-                                    <Text className="text-textMuted text-xs mt-1">Add More</Text>
-                                </Pressable>
-                            )}
-                        </View>
-                    </View>
-                )}
-            </View>
-
-            {/* Bottom Actions */}
-            <View className="px-6 py-6">
-                {/* Image count indicator */}
-                <View className="flex-row justify-center gap-2 mb-4">
-                    {[1, 2, 3].map((num) => (
-                        <View
-                            key={num}
-                            className={`w-3 h-3 rounded-full ${capturedImages.length >= num ? 'bg-primary' : 'bg-surface'
-                                }`}
-                        />
-                    ))}
-                </View>
-
-                {/* Pick from Gallery */}
-                <Pressable
-                    onPress={handlePickFromGallery}
-                    className="bg-surface border border-surfaceHover py-4 rounded-xl mb-4"
-                >
-                    <Text className="text-white text-center font-bold">
-                        🖼️ Pick from Gallery
-                    </Text>
-                </Pressable>
-
-                {/* Upload & Create Avatar */}
-                {capturedImages.length > 0 && (
-                    <Pressable
-                        onPress={handleUploadAll}
-                        disabled={isUploading}
-                        className="rounded-xl overflow-hidden"
-                    >
-                        <LinearGradient
-                            colors={isUploading ? ['#333', '#222'] : ['#FF00FF', '#00FFFF']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            className="py-5"
-                        >
-                            <Text className="text-white text-center text-xl font-bold">
-                                {isUploading
-                                    ? `⏳ Uploading... ${uploadProgress}%`
-                                    : '🧬 CREATE MY AVATAR'}
-                            </Text>
-                        </LinearGradient>
+            {/* Action Footer */}
+            <View style={styles.footer}>
+                {!capturedUri ? (
+                    <Pressable onPress={handleCapture} style={styles.captureBtn}>
+                        <View style={styles.captureInner} />
                     </Pressable>
+                ) : (
+                    <View style={styles.actionRow}>
+                        <Pressable onPress={handleRetake} style={styles.secondaryBtn}>
+                            <Text style={styles.secondaryBtnText}>RETAKE</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={handleUpload}
+                            disabled={isProcessing}
+                            style={styles.primaryBtn}
+                        >
+                            {isProcessing ? (
+                                <ActivityIndicator color="black" />
+                            ) : (
+                                <Text style={styles.primaryBtnText}>UPLOAD</Text>
+                            )}
+                        </Pressable>
+                    </View>
                 )}
             </View>
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.void,
+        padding: 24,
+    },
+    header: {
+        marginTop: 60,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        opacity: 0.5,
+    },
+    headerText: {
+        color: COLORS.bone,
+        fontSize: 10,
+        letterSpacing: 2,
+        fontWeight: 'bold',
+    },
+    main: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 40,
+    },
+    cameraContainer: {
+        width: width * 0.8,
+        height: width * 1.0,
+        backgroundColor: '#000',
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    camera: {
+        flex: 1,
+    },
+    preview: {
+        flex: 1,
+        resizeMode: 'cover',
+    },
+    overlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    oval: {
+        width: width * 0.5,
+        height: width * 0.7,
+        borderWidth: 1,
+        borderColor: COLORS.institutional,
+        borderRadius: 1000,
+        opacity: 0.6,
+    },
+    corner: {
+        position: 'absolute',
+        width: 20,
+        height: 20,
+        borderColor: COLORS.bone,
+        opacity: 0.5,
+    },
+    topLeft: { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 },
+    topRight: { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 },
+    bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 },
+    bottomRight: { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 },
+    instructionBox: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    instructionText: {
+        color: COLORS.bone,
+        fontSize: 18,
+        fontWeight: '900',
+        letterSpacing: 4,
+    },
+    instructionSubtext: {
+        color: COLORS.bone,
+        fontSize: 10,
+        letterSpacing: 1,
+        opacity: 0.5,
+        textAlign: 'center',
+    },
+    footer: {
+        marginBottom: 60,
+        alignItems: 'center',
+    },
+    captureBtn: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        borderWidth: 4,
+        borderColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    captureInner: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: COLORS.bone,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 16,
+        width: '100%',
+    },
+    primaryBtn: {
+        flex: 2,
+        backgroundColor: COLORS.bone,
+        paddingVertical: 18,
+        alignItems: 'center',
+        borderRadius: 2,
+    },
+    primaryBtnText: {
+        color: 'black',
+        fontWeight: '900',
+        letterSpacing: 4,
+    },
+    secondaryBtn: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: 'rgba(226, 218, 196, 0.3)',
+        paddingVertical: 18,
+        alignItems: 'center',
+        borderRadius: 2,
+    },
+    secondaryBtnText: {
+        color: COLORS.bone,
+        fontWeight: '900',
+        letterSpacing: 2,
+        opacity: 0.6,
+    },
+    button: {
+        backgroundColor: COLORS.bone,
+        padding: 16,
+        borderRadius: 4,
+    },
+    buttonText: {
+        color: 'black',
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+    centerContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 20,
+    },
+    title: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: 'bold',
+    }
+});

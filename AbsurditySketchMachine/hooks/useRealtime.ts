@@ -89,7 +89,7 @@ export function useSketchStatusRealtime(
                 onStatusUpdate(updated.status, updated.generation_progress);
             }
 
-            if (updated.status === 'complete') {
+            if (updated.status === 'complete' || updated.status === 'generated') {
                 onComplete();
             }
 

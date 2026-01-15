@@ -11,6 +11,7 @@ import {
     subscribeToSketchStatus,
     getSketches,
     getSketch,
+    callGetSeed,
 } from '../lib/supabase';
 import { cacheVideo } from '../lib/storage';
 import type { SketchConfig, Sketch, SketchStatus } from '../types';
@@ -75,6 +76,21 @@ export function useSketch() {
     }, [user?.id, setSketches]);
 
     // ========================================
+    // GET RANDOM SEED
+    // ========================================
+
+    const getSeed = useCallback(async (category?: string) => {
+        try {
+            const { data, error } = await callGetSeed(category);
+            if (error) throw error;
+            return data?.seed;
+        } catch (error) {
+            console.error('Error getting seed:', error);
+            return null;
+        }
+    }, []);
+
+    // ========================================
     // GENERATE SKETCH
     // ========================================
 
@@ -99,21 +115,24 @@ export function useSketch() {
                     type: config.type,
                     role: config.role,
                     dumbnessLevel: config.dumbnessLevel,
+                    premise: config.customPrompt,
+                    scene: config.scene,
                 }
             );
 
             if (error) throw error;
 
-            if (data?.sketchId) {
-                setCurrentSketch(data.sketchId);
+            if (data?.job_id) {
+                const sketchId = data.job_id;
+                setCurrentSketch(sketchId);
 
                 // Navigate to generation screen
                 router.push('/(main)/generating');
 
                 // Subscribe to updates
-                subscribeToUpdates(data.sketchId);
+                subscribeToUpdates(sketchId);
 
-                return data.sketchId;
+                return sketchId;
             }
 
             return null;
@@ -211,7 +230,7 @@ export function useSketch() {
     // ========================================
 
     const getSketchById = useCallback((sketchId: string): Sketch | undefined => {
-        return sketches.find((s) => s.id === sketchId);
+        return sketches.find((s: Sketch) => s.id === sketchId);
     }, [sketches]);
 
     return {
@@ -224,5 +243,6 @@ export function useSketch() {
         generateSketch,
         getSketchById,
         setSketchConfig,
+        getSeed,
     };
 }
