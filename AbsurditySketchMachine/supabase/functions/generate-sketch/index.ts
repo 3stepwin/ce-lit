@@ -278,6 +278,7 @@ Deno.serve(async (req) => {
             const p_category = vectorChosen ? (VECTOR_MAP[vectorChosen]?.category || null) : null;
             const session_id = (userId && isUuid(userId)) ? userId : crypto.randomUUID();
 
+            console.log("Starting seed resolution for category:", p_category);
             const { data: seed, error: seedError } = await supabase.rpc("get_random_seed", {
                 p_category: p_category,
                 p_session_id: session_id,
@@ -285,7 +286,7 @@ Deno.serve(async (req) => {
             });
 
             if (seedError || !seed || seed.length === 0) {
-                console.error("Seed fetch failed:", seedError);
+                console.error("Seed fetch failed or empty. Error:", seedError, "Data:", seed);
                 // Last ditch fallback if RPC fails or returns nothing
                 premise = `Mandatory ${sketch_type} artifact matching ${vectorChosen || "system"} protocol.`;
             } else {
@@ -308,10 +309,37 @@ Deno.serve(async (req) => {
             }
         }
 
+        // --- STAGE 1.3: EARLY RECORD CREATION (For Polling Support) ---
+        const recordId = sketchId || crypto.randomUUID();
+        const initialSketchData: any = {
+            id: recordId,
+            status: "generating",
+            sketch_type,
+            premise,
+            role,
+            cinema_lane,
+            provider_selected: (HIGGS_ENABLED && cinema_lane) ? "higgsfield" : "novita",
+        };
+        if (userId && isUuid(userId)) initialSketchData.user_id = userId;
+
+        // Upsert early so frontend polling finds it
+        await supabase.from("sketches").upsert(initialSketchData);
+        await supabase.from("celit_jobs").upsert({
+            id: recordId,
+            status: "pending",
+            sketch_type: sketch_type || "unknown_artifact",
+            premise: premise || "No premise provided",
+            role: role || "SUBJECT",
+            provider: "pending"
+        });
+
+        console.log(`CelitJob Initial Sync: ID=${recordId}`);
+
         const categories = ["cinematic", "cinematic_10x", "camera", "lenses", "director", "variety", "video"];
         const allRows: any[] = [];
 
         for (const cat of categories) {
+            console.log("Fetching packet for category:", cat);
             const { data, error } = await supabase.rpc("get_random_prompts", { p_limit: 2, p_category: cat });
             if (error) return json(500, { error: `RPC get_random_prompts failed for ${cat}`, details: error.message });
             allRows.push(...(data || []));
@@ -324,33 +352,49 @@ Deno.serve(async (req) => {
         const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
         const vectorContext = vectorChosen || (vectors.length ? vectors.join(", ") : "WORK_VECTOR");
 
-        // 1. SELECT IMAGE PACKET
-        let imagePacket: any;
-        const { data: imgPackets } = await supabase
-            .from('image_prompt_packets')
-            .select('*')
-            .eq('vector', vectorContext)
-            .limit(10);
+        // Helper for robust selection: exact match -> vector fallback -> universal
+        const selectPacket = async (table: string, vector: string, sketchType: string | null) => {
+            // 1. Exact Match
+            let { data: packets } = await supabase
+                .from(table)
+                .select('*')
+                .eq('vector', vector)
+                .eq('sketch_type', sketchType)
+                .limit(5);
 
-        if (imgPackets && imgPackets.length > 0) {
-            imagePacket = imgPackets[Math.floor(Math.random() * imgPackets.length)];
-        } else {
+            if (packets && packets.length > 0) return packets[Math.floor(Math.random() * packets.length)];
+
+            // 2. Vector Fallback (sketch_type NULL)
+            let { data: fallbacks } = await supabase
+                .from(table)
+                .select('*')
+                .eq('vector', vector)
+                .is('sketch_type', null)
+                .limit(5);
+
+            if (fallbacks && fallbacks.length > 0) return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+
+            // 3. Universal Fallback
+            let { data: universal } = await supabase
+                .from(table)
+                .select('*')
+                .eq('vector', 'UNIVERSAL')
+                .limit(1);
+
+            return universal && universal.length > 0 ? universal[0] : null;
+        };
+
+        // 1. SELECT IMAGE PACKET
+        let imagePacket = await selectPacket('image_prompt_packets', vectorContext, sketch_type);
+        if (!imagePacket) {
             imagePacket = { id: null, json_payload: { subject: role, action: "standing", setting: scene?.setting, camera: "security", meta_tokens: [vectorContext] } };
         }
         const imagePromptJson = imagePacket.json_payload;
 
         // 2. SELECT VIDEO PACKET
-        let videoPacket: any;
-        const { data: vidPackets } = await supabase
-            .from('video_prompt_packets')
-            .select('*')
-            .eq('vector', vectorContext)
-            .limit(10);
-
-        if (vidPackets && vidPackets.length > 0) {
-            videoPacket = vidPackets[Math.floor(Math.random() * vidPackets.length)];
-        } else {
-            videoPacket = { id: null, json_payload: { motion_type: "slow", camera_move: "static", subject_action: "blink", duration: 5 } };
+        let videoPacket = await selectPacket('video_prompt_packets', vectorContext, sketch_type);
+        if (!videoPacket) {
+            videoPacket = { id: null, json_payload: { motion_type: "slow", camera_move: "static", subject_action: "blink", duration: 5, end_freeze_verdict: true } };
         }
         const videoPromptJson = videoPacket.json_payload;
 
@@ -399,13 +443,7 @@ Deno.serve(async (req) => {
         }
 
         let record;
-        const recordId = sketchId || crypto.randomUUID();
-        const sketchData: any = {
-            status: "generating",
-            sketch_type,
-            premise,
-            role,
-
+        const updateData: any = {
             // NEW JSON PIPELINE FIELDS
             image_prompt_json: imagePromptJson,
             video_prompt_json: videoPromptJson,
@@ -414,59 +452,40 @@ Deno.serve(async (req) => {
 
             prompt_fragments: { rows: allRows },
             script_json: generated,
-            cinema_lane,
-            provider_selected: (HIGGS_ENABLED && cinema_lane) ? "higgsfield" : "novita",
             content: {
                 scene,
                 fragments: allRows,
                 screenshot_frame_text: generated.verdict_line,
                 deleted_line: generated.deleted_line,
                 caption_pack: generated.caption_pack,
-                outtakes: generated.outtakes, // Note: minimal fallback if gemini fails
+                outtakes: generated.outtakes,
                 artifact_title: generated.artifact_title
             }
         };
-        if (userId && isUuid(userId)) sketchData.user_id = userId;
 
-        if (sketchId) {
-            // Optimistic ID handling: Upsert the record so it exists for polling immediately
-            const { data, error } = await supabase.from("sketches")
-                .upsert({ id: sketchId, ...sketchData })
-                .select("*")
-                .single();
-            if (error) {
-                if (error.code === '23503') return json(400, { error: "Invalid User ID - Session Mismatch", details: error });
-                if (error.code === '23502') return json(400, { error: "Missing Required User ID", details: error });
-                return json(500, { error: "Database sync failed", details: error });
-            }
-            record = data;
-        } else {
-            const { data, error } = await supabase.from("sketches").insert(sketchData).select("*").single();
-            if (error) {
-                if (error.code === '23503') return json(400, { error: "Invalid User ID - Session Mismatch", details: error });
-                if (error.code === '23502') return json(400, { error: "Missing Required User ID", details: error });
-                return json(500, { error: "Insert failed", details: error });
-            }
-            record = data;
-        }
+        const { data: updatedRecord, error: updateError } = await supabase.from("sketches")
+            .update(updateData)
+            .eq('id', recordId)
+            .select("*")
+            .single();
 
+        if (updateError) return json(500, { error: "Database update failed", details: updateError });
+        record = updatedRecord;
 
-        console.log(`CelitJob Sync Trace: ID=${record.id} SketchType=${sketch_type} PremiseLen=${premise?.length}`);
+        console.log(`CelitJob Final Sync Trace: ID=${record.id} SketchType=${sketch_type}`);
 
         // Sync celit_jobs
         const { error: jobError } = await supabase.from("celit_jobs").upsert({
             id: record.id,
             status: "pending",
-            sketch_type: sketch_type || "unknown_artifact", // Fallback to prevent NOT NULL error
+            sketch_type: sketch_type || "unknown_artifact",
             premise: premise || "No premise provided",
             role: role || "SUBJECT",
-            provider: record.provider_selected || null,
+            provider: record.provider_selected,
+            prompt_fragments: JSON.stringify(allRows),
+            prompt_final: prompt_final,
             screenshot_frame_text: generated.verdict_line,
-            image_prompt_json: imagePromptJson,
-            video_prompt_json: videoPromptJson,
-            selected_image_packet_id: imagePacket?.id || null,
-            selected_video_packet_id: videoPacket?.id || null,
-            created_at: new Date().toISOString()
+            vector: vectorChosen
         });
 
         if (jobError) {
@@ -478,6 +497,50 @@ Deno.serve(async (req) => {
         }
 
         const useHiggs = HIGGS_ENABLED && record.cinema_lane === true;
+        const dry_run = body.dry_run === true;
+        const dry_run_mode = body.dry_run_mode || "success";
+
+        if (dry_run) {
+            const is_success = dry_run_mode === "success";
+            const final_status = is_success ? "succeed" : "failed";
+            const video_url = is_success ? "https://ixivvauatpogpifuzfmx.supabase.co/storage/v1/object/public/test/demo-dry-run.mp4" : null;
+            const verdict = is_success ? "YOU ARE INCLUDED. (DRY RUN)" : null;
+            const error_msg = is_success ? null : "Simulated dry_run failure";
+
+            // 1. Insert successful/failed job record directly
+            const { data: dryRecord, error: jobErr } = await supabase.from("celit_jobs").upsert({
+                id: recordId,
+                status: final_status,
+                sketch_type: sketch_type,
+                premise: premise || "Dry Run Premise",
+                provider: "dry_run",
+                prompt_fragments: JSON.stringify(allRows),
+                prompt_final: prompt_final,
+                result_video_url: video_url,
+                screenshot_frame_text: verdict,
+                error_message: error_msg,
+                vector: vectorChosen
+            }).select().single();
+
+            if (jobErr) return json(500, { error: "Failed to create dry_run job", details: jobErr.message });
+
+            // 2. Also create a corresponding sketch record
+            await supabase.from("sketches").upsert({
+                id: recordId,
+                user_id: (userId && isUuid(userId)) ? userId : null,
+                status: is_success ? "complete" : "failed",
+                sketch_type: sketch_type,
+                premise: premise || "Dry Run Premise",
+                role: role,
+                video_url: video_url,
+                error_message: error_msg,
+                cinema_lane: cinema_lane
+            });
+
+            console.log(`✅ DRY RUN ${final_status.toUpperCase()}: ${dryRecord.id}`);
+
+            return json(200, { ok: true, job_id: dryRecord.id, dry_run: true, mode: dry_run_mode });
+        }
 
         if (useHiggs) {
             // --- STAGE 3: THE CINEMA LANE (HIGGSFIELD) ---

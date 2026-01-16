@@ -91,7 +91,10 @@ export default function SystemAssemblyScreen() {
             let { user } = await getCurrentUser();
             if (!user) {
                 console.log("SYSCALL :: NO SESSION :: INITIATING GUEST AUTH");
-                const { data: guestData } = await signInAsGuest();
+                const { data: guestData, error: guestError } = await signInAsGuest();
+                if (guestError) {
+                    console.error("SYSCALL :: GUEST AUTH FAILED", guestError);
+                }
                 user = guestData?.user;
             }
 
@@ -103,7 +106,7 @@ export default function SystemAssemblyScreen() {
 
             // 3. Fire the Backend Command (Service Role will handle DB creation)
             console.log("SYSCALL :: FIRING BACKEND (CINEMA LANE)");
-            callGenerateSketch(
+            const { data, error } = await callGenerateSketch(
                 userId,
                 selectedAvatarId || "generic",
                 {
@@ -114,14 +117,16 @@ export default function SystemAssemblyScreen() {
                     cinema_lane: true // FORCE ACTIVE
                 },
                 newJobId
-            ).then(res => {
-                console.log("SYSCALL :: BACKEND RESPONSE RECEIVED", res);
-                if (res?.error) {
-                    console.error("SYSCALL :: BACKEND ERROR", res.error);
-                }
-            }).catch(e => {
-                console.error("SYSCALL :: UNEXPECTED CRASH", e);
-            });
+            );
+
+            if (error) {
+                console.error("SYSCALL :: BACKEND ERROR", error);
+                // Don't Alert yet, polling might still pick up the record if it partially succeeded
+                // but let's log the detail
+                setLogs(prev => [...prev, `ERR: ${error.message || 'Connection Refused'}`]);
+            } else {
+                console.log("SYSCALL :: BACKEND RESPONSE SUCCESS", data);
+            }
 
         } catch (e) {
             console.error("SYSCALL :: STARTUP FAILURE", e);
@@ -148,14 +153,16 @@ export default function SystemAssemblyScreen() {
 
             if (!data) {
                 missingRecordCountRef.current += 1;
-                console.warn(`POLLING :: RECORD NOT FOUND (${missingRecordCountRef.current})`);
+                console.warn(`POLLING :: RECORD NOT FOUND (${missingRecordCountRef.current}) / ID: ${sketchId}`);
 
-                // Allow up to 10 seconds for the backend to create the row
-                if (missingRecordCountRef.current > 5) {
+                // Increase tolerance: Backend generation can take time to even start the DB upsert
+                // 30 attempts * 2s = 60 seconds
+                if (missingRecordCountRef.current > 30) {
                     console.error("POLLING ERROR :: RECORD NEVER CREATED");
                     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
                     pollIntervalRef.current = null;
-                    handleRetry();
+                    Alert.alert("Connection Timed Out", "The system failed to respond. Please check your connection and retry.");
+                    setIsDelayed(true);
                 }
                 return;
             }
@@ -185,7 +192,8 @@ export default function SystemAssemblyScreen() {
             else if (data.status === 'failed') {
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
                 pollIntervalRef.current = null;
-                Alert.alert("Generation Failed", "Attempt Limit Reached.");
+                const errMsg = data.error_message || "Attempt Limit Reached.";
+                Alert.alert("Generation Failed", errMsg);
                 router.replace('/');
             }
 
